@@ -950,7 +950,7 @@ if MAIN:
     HF_TOKEN = os.getenv("HF_TOKEN")
     assert HF_TOKEN, "Please set HF_TOKEN in your .env file"
 
-    gemma_2_2b = HookedSAETransformer.from_pretrained("gemma-2-2b", device=device)
+    gemma_2_2b = HookedSAETransformer.from_pretrained_no_processing("gemma-2-2b", device=device, dtype=t.bfloat16, n_ctx=1024)
 
     gemmascope_sae_release = "gemma-scope-2b-pt-res-canonical"
     gemmascope_sae_id = "layer_20/width_16k/canonical"
@@ -1229,7 +1229,10 @@ if MAIN:
 # %%
 
 import hdbscan
+import numba
 from umap import UMAP
+
+numba.config.THREADING_LAYER = "workqueue"
 
 
 def compute_sae_umap_data(
@@ -1782,6 +1785,12 @@ if MAIN:
 # %%
 
 if MAIN:
+    # Free Gemma-2-2B and its SAE (not used after the GemmaScope section) 
+    # before loading a second Gemma.
+    gemma_2_2b = gemma_2_2b_sae = None
+    gc.collect()
+    t.cuda.empty_cache()
+
     gemma_2b_it = HookedSAETransformer.from_pretrained("google/gemma-2b-it", device=device)
 
     prompt = "\n".join(

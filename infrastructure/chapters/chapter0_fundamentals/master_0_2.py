@@ -2266,7 +2266,7 @@ You can use these two facts to construct a list `in_features_per_group`, and the
 <details>
 <summary>Help - I'm not sure how to construct the 7x7 conv at the very start.</summary>
 
-The stride, padding & output channels are givin in the diagram; the only thing not provided is `in_channels`. Recall that the input to this layer is an RGB image - can you deduce from this how many input channels your layer should have?
+The stride, padding & output channels are given in the diagram; the only thing not provided is `in_channels`. Recall that the input to this layer is an RGB image - can you deduce from this how many input channels your layer should have?
 
 </details>
 
@@ -2888,6 +2888,9 @@ def train(args: ResNetTrainingArgs) -> tuple[list[float], list[float], ResNet34]
     return loss_list, accuracy_list, model
     # END SOLUTION
 
+# ! CELL TYPE: code
+# ! FILTERS: []
+# ! TAGS: []
 
 # HIDE
 if MAIN:

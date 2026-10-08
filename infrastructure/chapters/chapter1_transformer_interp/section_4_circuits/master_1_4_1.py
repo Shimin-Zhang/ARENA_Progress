@@ -263,7 +263,7 @@ ipython.run_line_magic("autoreload", "2")
 # try:
 #     import transformer_lens
 # except:
-#     %pip install transformer_lens==2.17.0 einops jaxtyping git+https://github.com/callummcdougall/CircuitsVis.git#subdirectory=python
+#     %pip install "transformer_lens>=3.9,<4" einops jaxtyping git+https://github.com/ARENA-education/CircuitsVis.git@arena-tl4.1#subdirectory=python
 
 # # Get root directory, handling 3 different cases: (1) Colab, (2) notebook not in ARENA repo, (3) notebook in ARENA repo
 # root = (
@@ -1353,6 +1353,10 @@ Try replacing `attention_patterns` above with `attention_heads`, and compare the
 
 <details>
 <summary>Help - my <code>attention_heads</code> plots are behaving weirdly.</summary>
+
+> This bug shouldn't happen anymore, it was addressed in
+> [PR #63 (commit cc21677)](https://github.com/TransformerLensOrg/CircuitsVis/pull/63)
+> but I'm leaving this note here just in case.
 
 This seems to be a bug in `circuitsvis` - on VSCode, the attention head plots continually shrink in size.
 

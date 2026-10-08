@@ -261,7 +261,7 @@ branch = "main"
 # try:
 #     import transformer_lens
 # except:
-#     %pip install "openai==1.56.1" einops datasets jaxtyping "sae-lens>=6.37.4,<7.0.0" openai tabulate umap-learn hdbscan git+https://github.com/ARENA-education/eindex.git git+https://github.com/callummcdougall/CircuitsVis.git#subdirectory=python git+https://github.com/ARENA-education/sae_vis.git@v0.3.7+arena.1 transformer_lens==2.17.0
+#     %pip install "openai>=1.56.2,<4" einops datasets jaxtyping "sae-lens>=6.51.3,<7.0.0" openai tabulate umap-learn hdbscan git+https://github.com/ARENA-education/eindex.git git+https://github.com/ARENA-education/CircuitsVis.git@arena-tl4.1#subdirectory=python git+https://github.com/ARENA-education/sae_vis.git@v0.3.7+arena.2 "transformer_lens>=3.9,<4"
 
 # # Get root directory, handling 3 different cases: (1) Colab, (2) notebook not in ARENA repo, (3) notebook in ARENA repo
 root = (
@@ -1895,14 +1895,27 @@ For now though, we'll focus on just the first half of autointerp, i.e. the gener
 
 def get_autointerp_df(sae_release="gpt2-small-res-jb", sae_id="blocks.7.hook_resid_pre") -> pd.DataFrame:
     release = get_pretrained_saes_directory()[sae_release]
-    neuronpedia_id = release.neuronpedia_id[sae_id]
+    neuronpedia_id = release.neuronpedia_id[sae_id]  # e.g. "gpt2-small/7-res-jb"
 
-    url = "https://www.neuronpedia.org/api/explanation/export?modelId={}&saeId={}".format(*neuronpedia_id.split("/"))
-    headers = {"Content-Type": "application/json"}
-    response = requests.get(url, headers=headers)
+    # Neuronpedia publishes its explanations as gzipped JSONL files in a public S3 bucket (see
+    # https://neuronpedia-datasets.s3.us-east-1.amazonaws.com/index.html?prefix=v1/ - there are several files per
+    # SAE, so we list all the files for this SAE then download & concatenate them)
+    bucket_url = "https://neuronpedia-datasets.s3.us-east-1.amazonaws.com"
+    params = {"list-type": "2", "prefix": f"v1/{neuronpedia_id}/explanations/"}
+    listing = requests.get(bucket_url, params=params)
+    listing.raise_for_status()
+    keys = re.findall(r"<Key>(.*?)</Key>", listing.text)
+    assert len(keys) > 0, f"No explanations found on Neuronpedia for {neuronpedia_id!r}"
 
-    data = response.json()
-    return pd.DataFrame(data)
+    columns = ["modelId", "layer", "index", "description", "explanationModelName", "typeName"]
+    df = pd.concat(
+        [
+            pd.read_json(f"{bucket_url}/{key}", lines=True, compression="gzip", dtype={"index": int})[columns]
+            for key in tqdm(keys, desc=f"Downloading explanations for {neuronpedia_id}")
+        ],
+        ignore_index=True,
+    )
+    return df.sort_values("index", kind="stable", ignore_index=True)
 
 
 explanations_df = get_autointerp_df()
@@ -3467,7 +3480,7 @@ if MAIN and FLAG_RUN_GEMMASCOPE:
     HF_TOKEN = os.getenv("HF_TOKEN")
     assert HF_TOKEN, "Please set HF_TOKEN in your .env file"
 
-    gemma_2_2b = HookedSAETransformer.from_pretrained("gemma-2-2b", device=device)
+    gemma_2_2b = HookedSAETransformer.from_pretrained_no_processing("gemma-2-2b", device=device, dtype=t.bfloat16, n_ctx=1024)
 
     gemmascope_sae_release = "gemma-scope-2b-pt-res-canonical"
     gemmascope_sae_id = "layer_20/width_16k/canonical"
@@ -3490,7 +3503,6 @@ In this case, try and free up space by clearing your cache of huggingface models
 If you still get the above error message after clearing your cache of all models you're no longer using (or you're getting other errors e.g. OOMs when you try to run the model), we recommend one of the following options:
 
 - Choosing a latent from the GPT2-Small model you've been working with so far, and doing the exercises with that instead (note that at time of writing there are no highly performant SAEs trained on GPT2-Medium, Large, or XL models, but this might not be the case when you're reading this, in which case you could try those instead!).
-- Using float16 precision for the model, rather than 32 (you can pass `dtype="float16"` to the `from_pretrained` method).
 - Using a more powerful machine, e.g. renting an A100 from vast.ai or using Google Colab Pro (or Pro+).
 '''
 
@@ -4302,7 +4314,10 @@ A final note - so that the plot is more interpretable, we've included the fields
 # ! TAGS: []
 
 import hdbscan
+import numba
 from umap import UMAP
+
+numba.config.THREADING_LAYER = "workqueue"
 
 
 def compute_sae_umap_data(
@@ -5443,6 +5458,12 @@ Reminder - you can use `huggingface-cli delete-cache` to clear your cache if you
 # ! TAGS: []
 
 if MAIN and FLAG_RUN_GEMMASCOPE:
+    # Free Gemma-2-2B and its SAE (not used after the GemmaScope section) 
+    # before loading a second Gemma.
+    gemma_2_2b = gemma_2_2b_sae = None
+    gc.collect()
+    t.cuda.empty_cache()
+
     gemma_2b_it = HookedSAETransformer.from_pretrained("google/gemma-2b-it", device=device)
 
     prompt = "\n".join(
